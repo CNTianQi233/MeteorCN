@@ -27,6 +27,7 @@ import meteordevelopment.meteorclient.utils.misc.Version;
 import meteordevelopment.meteorclient.utils.misc.input.KeyAction;
 import meteordevelopment.meteorclient.utils.misc.input.KeyBinds;
 import meteordevelopment.meteorclient.utils.network.OnlinePlayers;
+import meteordevelopment.meteorclient.utils.tooltip.MeteorTooltipManager;
 import meteordevelopment.orbit.EventBus;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
@@ -134,6 +135,9 @@ public class MeteorClient implements ClientModInitializer {
 
         // Pre init
         ReflectInit.init(PreInit.class);
+
+        // Initialize tooltip manager (using Fabric API for Connector compatibility)
+        MeteorTooltipManager.init();
 
         // Register module categories
         Categories.init();

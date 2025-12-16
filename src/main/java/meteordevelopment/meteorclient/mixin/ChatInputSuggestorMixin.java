@@ -37,8 +37,9 @@ public abstract class ChatInputSuggestorMixin {
     @Inject(method = "refresh",
         at = @At(value = "INVOKE", target = "Lcom/mojang/brigadier/StringReader;canRead()Z", remap = false),
         cancellable = true,
-        locals = LocalCapture.CAPTURE_FAILHARD)
+        locals = LocalCapture.CAPTURE_FAILSOFT, require = 0)
     public void onRefresh(CallbackInfo ci, String string, StringReader reader) {
+        if (reader == null) return;
         String prefix = Config.get().prefix.get();
         int length = prefix.length();
 
