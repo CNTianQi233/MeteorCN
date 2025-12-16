@@ -41,12 +41,18 @@ public class AddonManager {
 
                 @Override
                 public String getCommit() {
-                    String commit = MeteorClient.MOD_META.getCustomValue(MeteorClient.MOD_ID + ":commit").getAsString();
-                    return commit.isEmpty() ? null : commit;
+                    try {
+                        var customValue = MeteorClient.MOD_META.getCustomValue(MeteorClient.MOD_ID + ":commit");
+                        if (customValue == null) return null;
+                        String commit = customValue.getAsString();
+                        return commit == null || commit.isEmpty() ? null : commit;
+                    } catch (Exception e) {
+                        return null;
+                    }
                 }
             };
 
-            ModMetadata metadata = FabricLoader.getInstance().getModContainer(MeteorClient.MOD_ID).get().getMetadata();
+            ModMetadata metadata = FabricLoader.getInstance().getModContainer(MeteorClient.MOD_ID).orElseThrow().getMetadata();
 
             MeteorClient.ADDON.name = metadata.getName();
             MeteorClient.ADDON.authors = new String[metadata.getAuthors().size()];

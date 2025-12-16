@@ -21,6 +21,7 @@ public class MixinPlugin implements IMixinConfigPlugin {
     private static final String mixinPackage = "meteordevelopment.meteorclient.mixin";
 
     private static boolean loaded;
+    private static boolean isConnectorEnvironment;
 
     private static boolean isOriginsPresent;
     private static boolean isIndigoPresent;
@@ -34,48 +35,92 @@ public class MixinPlugin implements IMixinConfigPlugin {
     public void onLoad(String mixinPackage) {
         if (loaded) return;
 
-        try {
-            // Get class loader
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            Class<?> classLoaderClass = classLoader.getClass();
+        // Detect if running under Sinytra Connector (Forge environment)
+        isConnectorEnvironment = detectConnectorEnvironment();
 
-            // Get delegate
-            Field delegateField = classLoaderClass.getDeclaredField("delegate");
-            delegateField.setAccessible(true);
-            Object delegate = delegateField.get(classLoader);
-            Class<?> delegateClass = delegate.getClass();
+        if (!isConnectorEnvironment) {
+            // Original Fabric ASM transformer injection
+            try {
+                // Get class loader
+                ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+                Class<?> classLoaderClass = classLoader.getClass();
 
-            // Get mixinTransformer field
-            Field mixinTransformerField = delegateClass.getDeclaredField("mixinTransformer");
-            mixinTransformerField.setAccessible(true);
+                // Get delegate
+                Field delegateField = classLoaderClass.getDeclaredField("delegate");
+                delegateField.setAccessible(true);
+                Object delegate = delegateField.get(classLoader);
+                Class<?> delegateClass = delegate.getClass();
 
-            // Get unsafe
-            Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
-            unsafeField.setAccessible(true);
-            Unsafe unsafe = (Unsafe) unsafeField.get(null);
+                // Get mixinTransformer field
+                Field mixinTransformerField = delegateClass.getDeclaredField("mixinTransformer");
+                mixinTransformerField.setAccessible(true);
 
-            // Create Asm
+                // Get unsafe
+                Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+                unsafeField.setAccessible(true);
+                Unsafe unsafe = (Unsafe) unsafeField.get(null);
+
+                // Create Asm
+                Asm.init();
+
+                // Change delegate
+                Asm.Transformer mixinTransformer = (Asm.Transformer) unsafe.allocateInstance(Asm.Transformer.class);
+                mixinTransformer.delegate = (IMixinTransformer) mixinTransformerField.get(delegate);
+
+                mixinTransformerField.set(delegate, mixinTransformer);
+            }
+            catch (NoSuchFieldException | IllegalAccessException | InstantiationException e) {
+                e.printStackTrace();
+            }
+        } else {
+            // In Connector environment, just initialize Asm without transformer injection
+            // The ASM transformations will be handled differently or skipped
             Asm.init();
-
-            // Change delegate
-            Asm.Transformer mixinTransformer = (Asm.Transformer) unsafe.allocateInstance(Asm.Transformer.class);
-            mixinTransformer.delegate = (IMixinTransformer) mixinTransformerField.get(delegate);
-
-            mixinTransformerField.set(delegate, mixinTransformer);
-        }
-        catch (NoSuchFieldException | IllegalAccessException | InstantiationException e) {
-            e.printStackTrace();
         }
 
-        isIndigoPresent = FabricLoader.getInstance().isModLoaded("fabric-renderer-indigo");
-        isOriginsPresent = FabricLoader.getInstance().isModLoaded("origins");
-        isSodiumPresent = FabricLoader.getInstance().isModLoaded("sodium");
-        isCanvasPresent = FabricLoader.getInstance().isModLoaded("canvas");
-        isLithiumPresent = FabricLoader.getInstance().isModLoaded("lithium");
-        isIrisPresent = FabricLoader.getInstance().isModLoaded("iris");
-        isIndiumPresent = FabricLoader.getInstance().isModLoaded("indium");
+        // Safe mod detection that works in both environments
+        isIndigoPresent = isModLoaded("fabric-renderer-indigo");
+        isOriginsPresent = isModLoaded("origins");
+        isSodiumPresent = isModLoaded("sodium") || isModLoaded("embeddium") || isModLoaded("rubidium");
+        isCanvasPresent = isModLoaded("canvas");
+        isLithiumPresent = isModLoaded("lithium");
+        isIrisPresent = isModLoaded("iris") || isModLoaded("oculus");
+        isIndiumPresent = isModLoaded("indium");
 
         loaded = true;
+    }
+
+    private static boolean detectConnectorEnvironment() {
+        try {
+            // Check for Sinytra Connector
+            Class.forName("org.sinytra.connector.ConnectorEarlyLoader");
+            return true;
+        } catch (ClassNotFoundException e) {
+            // Not in Connector environment
+        }
+
+        try {
+            // Check for Forge
+            Class.forName("net.minecraftforge.fml.loading.FMLLoader");
+            return true;
+        } catch (ClassNotFoundException e) {
+            // Not in Forge environment
+        }
+
+        return false;
+    }
+
+    private static boolean isModLoaded(String modId) {
+        try {
+            return FabricLoader.getInstance().isModLoaded(modId);
+        } catch (Exception e) {
+            // Fallback for edge cases
+            return false;
+        }
+    }
+
+    public static boolean isConnector() {
+        return isConnectorEnvironment;
     }
 
     @Override
@@ -92,10 +137,12 @@ public class MixinPlugin implements IMixinConfigPlugin {
             return !isOriginsPresent;
         }
         else if (mixinClassName.startsWith(mixinPackage + ".sodium")) {
+            // In Connector environment, sodium mixins target Embeddium/Rubidium
             return isSodiumPresent;
         }
         else if (mixinClassName.startsWith(mixinPackage + ".indigo")) {
-            return isIndigoPresent;
+            // Indigo is Fabric-specific, disable in Connector
+            return isIndigoPresent && !isConnectorEnvironment;
         }
         else if (mixinClassName.startsWith(mixinPackage + ".canvas")) {
             return isCanvasPresent;
@@ -104,7 +151,8 @@ public class MixinPlugin implements IMixinConfigPlugin {
             return isLithiumPresent;
         }
         else if (mixinClassName.startsWith(mixinPackage + ".indium")) {
-            return isIndiumPresent;
+            // Indium is Fabric-specific, disable in Connector
+            return isIndiumPresent && !isConnectorEnvironment;
         }
 
 

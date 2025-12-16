@@ -1,0 +1,33 @@
+{
+  "format_version": 2,
+  "mixins": {
+    "disable": [
+      "meteor-client-canvas.mixins.json",
+      "meteor-client-indigo.mixins.json",
+      "meteor-client-indium.mixins.json"
+    ],
+    "config_overrides": {
+      "meteor-client.mixins.json": {
+        "defaultRequire": 0
+      },
+      "meteor-client-baritone.mixins.json": {
+        "defaultRequire": 0
+      },
+      "meteor-client-sodium.mixins.json": {
+        "defaultRequire": 0
+      },
+      "meteor-client-lithium.mixins.json": {
+        "defaultRequire": 0
+      }
+    }
+  },
+  "class_filters": {
+    "disable": []
+  },
+  "aw_extension": {
+    "entries": []
+  },
+  "priorities": {
+    "meteor-client": 900
+  }
+}

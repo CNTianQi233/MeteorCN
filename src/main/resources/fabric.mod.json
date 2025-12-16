@@ -44,6 +44,12 @@
       "links": {
         "modmenu.discord": "https://meteorclient.com/discord"
       }
+    },
+    "connector": {
+      "skip_class_transform": [
+        "meteordevelopment.meteorclient.asm.Asm$Transformer",
+        "meteordevelopment.meteorclient.asm.Asm"
+      ]
     }
   },
   "depends": {

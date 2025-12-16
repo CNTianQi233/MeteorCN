@@ -33,6 +33,7 @@ import meteordevelopment.orbit.EventPriority;
 import meteordevelopment.orbit.IEventBus;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.metadata.CustomValue;
 import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.lang.invoke.MethodHandles;
+import java.nio.file.Path;
 
 public class MeteorClient implements ClientModInitializer {
     public static final String MOD_ID = "meteor-client";
@@ -54,7 +56,7 @@ public class MeteorClient implements ClientModInitializer {
 
     public static MinecraftClient mc;
     public static final IEventBus EVENT_BUS = new EventBus();
-    public static final File FOLDER = FabricLoader.getInstance().getGameDir().resolve(MOD_ID).toFile();
+    public static final File FOLDER;
     public static final Logger LOG;
 
     static {
@@ -63,6 +65,9 @@ public class MeteorClient implements ClientModInitializer {
         NAME = MOD_META.getName();
         LOG = LoggerFactory.getLogger(NAME);
 
+        // Initialize FOLDER with fallback for different environments
+        FOLDER = initializeFolder();
+
         String versionString = MOD_META.getVersion().getFriendlyString();
         if (versionString.contains("-")) versionString = versionString.split("-")[0];
 
@@ -70,7 +75,26 @@ public class MeteorClient implements ClientModInitializer {
         if (versionString.equals("${version}")) versionString = "0.0.0";
 
         VERSION = new Version(versionString);
-        DEV_BUILD = MOD_META.getCustomValue(MeteorClient.MOD_ID + ":devbuild").getAsString();
+        DEV_BUILD = getDevBuild();
+    }
+
+    private static File initializeFolder() {
+        try {
+            Path gameDir = FabricLoader.getInstance().getGameDir();
+            return gameDir.resolve(MOD_ID).toFile();
+        } catch (Exception e) {
+            // Fallback for edge cases in Connector environment
+            return new File(System.getProperty("user.dir"), MOD_ID);
+        }
+    }
+
+    private static String getDevBuild() {
+        try {
+            CustomValue customValue = MOD_META.getCustomValue(MOD_ID + ":devbuild");
+            return customValue != null ? customValue.getAsString() : "";
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     @Override

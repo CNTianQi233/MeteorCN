@@ -118,6 +118,7 @@
     "MouseMixin",
     "MultiplayerScreenMixin",
     "PacketByteBufMixin",
+    "PacketInflaterMixin",
     "ParticleManagerMixin",
     "PlayerArmorSlotMixin",
     "PlayerEntityMixin",

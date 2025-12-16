@@ -6,8 +6,11 @@
 package meteordevelopment.meteorclient.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.blaze3d.systems.RenderSystem;
 import meteordevelopment.meteorclient.MeteorClient;
+import meteordevelopment.meteorclient.asm.Asm;
+import meteordevelopment.meteorclient.events.render.GetFovEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.render.RenderAfterWorldEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
@@ -178,5 +181,17 @@ public abstract class GameRendererMixin {
     private double updateTargetedEntityModifySquaredMaxReach(double d) {
         Reach reach = Modules.get().get(Reach.class);
         return reach.entityReach() * reach.entityReach();
+    }
+
+    // FOV modification - Mixin replacement for ASM Transformer (used in Connector environment)
+    // This provides the same functionality as GameRendererTransformer when ASM injection is not available
+    @ModifyReturnValue(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D", at = @At("RETURN"))
+    private double modifyGetFov(double original) {
+        // Only apply this modification in Connector environment
+        // In native Fabric, the ASM Transformer handles this
+        if (Asm.isConnector()) {
+            return MeteorClient.EVENT_BUS.post(GetFovEvent.get(original)).fov;
+        }
+        return original;
     }
 }

@@ -31,6 +31,7 @@ public class Asm {
 
     private final Map<String, AsmTransformer> transformers = new HashMap<>();
     private final boolean export;
+    private static boolean isConnectorEnvironment;
 
     public Asm(boolean export) {
         this.export = export;
@@ -39,10 +40,40 @@ public class Asm {
     public static void init() {
         if (INSTANCE != null) return;
 
+        // Detect Connector/Forge environment
+        isConnectorEnvironment = detectConnectorEnvironment();
+
         INSTANCE = new Asm(System.getProperty("meteor.asm.export") != null);
-        INSTANCE.add(new GameRendererTransformer());
-        INSTANCE.add(new CanvasWorldRendererTransformer());
-        INSTANCE.add(new PacketInflaterTransformer());
+
+        // Only add transformers in native Fabric environment
+        // In Connector, these transformations are handled by Mixins instead
+        if (!isConnectorEnvironment) {
+            INSTANCE.add(new GameRendererTransformer());
+            INSTANCE.add(new CanvasWorldRendererTransformer());
+            INSTANCE.add(new PacketInflaterTransformer());
+        }
+    }
+
+    private static boolean detectConnectorEnvironment() {
+        try {
+            Class.forName("org.sinytra.connector.ConnectorEarlyLoader");
+            return true;
+        } catch (ClassNotFoundException e) {
+            // Not in Connector
+        }
+
+        try {
+            Class.forName("net.minecraftforge.fml.loading.FMLLoader");
+            return true;
+        } catch (ClassNotFoundException e) {
+            // Not in Forge
+        }
+
+        return false;
+    }
+
+    public static boolean isConnector() {
+        return isConnectorEnvironment;
     }
 
     private void add(AsmTransformer transformer) {
