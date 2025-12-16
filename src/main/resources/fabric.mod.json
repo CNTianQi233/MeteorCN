@@ -47,7 +47,7 @@
     },
     "connector": {
       "skip_class_transform": [
-        "meteordevelopment.meteorclient.asm.Asm$Transformer",
+        "meteordevelopment.meteorclient.asm.Asm$$Transformer",
         "meteordevelopment.meteorclient.asm.Asm"
       ]
     }
