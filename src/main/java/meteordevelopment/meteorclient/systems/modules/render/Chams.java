@@ -231,7 +231,9 @@ public class Chams extends Module {
 
     public void updateShader(Shader value) {
         if (value == Shader.None) return;
-        PostProcessShaders.CHAMS.init(Utils.titleToName(value.name()));
+        if (PostProcessShaders.CHAMS != null) {
+            PostProcessShaders.CHAMS.init(Utils.titleToName(value.name()));
+        }
     }
 
     public enum Shader {

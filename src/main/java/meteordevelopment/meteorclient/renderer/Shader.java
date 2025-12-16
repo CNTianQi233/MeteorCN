@@ -59,11 +59,24 @@ public class Shader {
 
     private String read(String path) {
         try {
-            return IOUtils.toString(mc.getResourceManager().getResource(new MeteorIdentifier("shaders/" + path)).get().getInputStream(), StandardCharsets.UTF_8);
+            var resource = mc.getResourceManager().getResource(new MeteorIdentifier("shaders/" + path));
+            if (resource.isPresent()) {
+                return IOUtils.toString(resource.get().getInputStream(), StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            // Ignore and try fallback
+        }
+
+        try {
+            var stream = Shader.class.getResourceAsStream("/assets/meteor-client/shaders/" + path);
+            if (stream != null) {
+                return IOUtils.toString(stream, StandardCharsets.UTF_8);
+            }
         } catch (IOException e) {
             e.printStackTrace();
-            return "";
         }
+        
+        return "";
     }
 
     public void bind() {
