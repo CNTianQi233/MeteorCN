@@ -5,7 +5,6 @@
 
 package meteordevelopment.meteorclient.mixin;
 
-import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.DamageEvent;
 import meteordevelopment.meteorclient.events.entity.player.CanWalkOnFluidEvent;
@@ -57,15 +56,16 @@ public abstract class LivingEntityMixin extends Entity {
             MeteorClient.EVENT_BUS.post(DamageEvent.get((LivingEntity) (Object) this, source, amount));
     }
 
-    @ModifyReturnValue(method = "canWalkOnFluid", at = @At("RETURN"))
-    private boolean onCanWalkOnFluid(boolean original, FluidState fluidState) {
-        if ((Object) this != mc.player) return original;
+    @Inject(method = "canWalkOnFluid", at = @At("RETURN"), cancellable = true)
+    private void onCanWalkOnFluid(FluidState fluidState, CallbackInfoReturnable<Boolean> cir) {
+        if ((Object) this != mc.player) return;
         CanWalkOnFluidEvent event = MeteorClient.EVENT_BUS.post(CanWalkOnFluidEvent.get(fluidState));
-
-        return event.walkOnFluid;
+        if (event.walkOnFluid) {
+            cir.setReturnValue(true);
+        }
     }
 
-    @Redirect(method = "travel", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;hasNoGravity()Z"))
+    @Redirect(method = "travel", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;hasNoGravity()Z"), require = 0)
     private boolean travelHasNoGravityProxy(LivingEntity self) {
         if (activeStatusEffects.containsKey(StatusEffects.LEVITATION) && Modules.get().get(PotionSpoof.class).shouldBlock(StatusEffects.LEVITATION)) {
             return !Modules.get().get(PotionSpoof.class).applyGravity.get();
@@ -86,7 +86,7 @@ public abstract class LivingEntityMixin extends Entity {
         }
     }
 
-    @ModifyArg(method = "swingHand(Lnet/minecraft/util/Hand;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;swingHand(Lnet/minecraft/util/Hand;Z)V"))
+    @ModifyArg(method = "swingHand(Lnet/minecraft/util/Hand;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;swingHand(Lnet/minecraft/util/Hand;Z)V"), require = 0)
     private Hand setHand(Hand hand) {
         HandView handView = Modules.get().get(HandView.class);
         if ((Object) this == mc.player && handView.isActive()) {
@@ -96,19 +96,17 @@ public abstract class LivingEntityMixin extends Entity {
         return hand;
     }
 
-    @ModifyConstant(method = "getHandSwingDuration", constant = @Constant(intValue = 6))
+    @ModifyConstant(method = "getHandSwingDuration", constant = @Constant(intValue = 6), require = 0)
     private int getHandSwingDuration(int constant) {
         if ((Object) this != mc.player) return constant;
         return Modules.get().get(HandView.class).isActive() && mc.options.getPerspective().isFirstPerson() ? Modules.get().get(HandView.class).swingSpeed.get() : constant;
     }
 
-    @ModifyReturnValue(method = "isFallFlying", at = @At("RETURN"))
-    private boolean isFallFlyingHook(boolean original) {
+    @Inject(method = "isFallFlying", at = @At("RETURN"), cancellable = true)
+    private void isFallFlyingHook(CallbackInfoReturnable<Boolean> cir) {
         if ((Object) this == mc.player && Modules.get().get(ElytraFly.class).canPacketEfly()) {
-            return true;
+            cir.setReturnValue(true);
         }
-
-        return original;
     }
 
     private boolean previousElytra = false;
@@ -123,10 +121,10 @@ public abstract class LivingEntityMixin extends Entity {
         previousElytra = elytra;
     }
 
-    @ModifyReturnValue(method = "hasStatusEffect", at = @At("RETURN"))
-    private boolean hasStatusEffect(boolean original, StatusEffect effect) {
-        if (Modules.get().get(PotionSpoof.class).shouldBlock(effect)) return false;
-
-        return original;
+    @Inject(method = "hasStatusEffect", at = @At("RETURN"), cancellable = true)
+    private void hasStatusEffect(StatusEffect effect, CallbackInfoReturnable<Boolean> cir) {
+        if (Modules.get().get(PotionSpoof.class).shouldBlock(effect)) {
+            cir.setReturnValue(false);
+        }
     }
 }

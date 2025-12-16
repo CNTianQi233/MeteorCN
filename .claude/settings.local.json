@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(tree:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(powershell -Command \"Get-ChildItem ''D:\\#res\\meteor\\temp\\错误报告-2025-12-16_18.18.32''\")"
     ]
   }
 }

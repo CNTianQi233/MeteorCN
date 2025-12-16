@@ -5,8 +5,6 @@
 
 package meteordevelopment.meteorclient.mixin;
 
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.LivingEntityMoveEvent;
 import meteordevelopment.meteorclient.events.entity.player.JumpVelocityMultiplierEvent;
@@ -31,7 +29,10 @@ import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.fluid.FluidState;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -46,13 +47,13 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 @Mixin(Entity.class)
 public abstract class EntityMixin {
 
-    @ModifyExpressionValue(method = "updateMovementInFluid", at = @At(value = "INVOKE", target = "Lnet/minecraft/fluid/FluidState;getVelocity(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/math/Vec3d;"))
-    private Vec3d updateMovementInFluidFluidStateGetVelocity(Vec3d vec) {
+    @Redirect(method = "updateMovementInFluid", at = @At(value = "INVOKE", target = "Lnet/minecraft/fluid/FluidState;getVelocity(Lnet/minecraft/world/BlockView;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/util/math/Vec3d;"), require = 0)
+    private Vec3d redirectFluidStateGetVelocity(FluidState fluidState, BlockView world, BlockPos pos) {
+        Vec3d vec = fluidState.getVelocity(world, pos);
         Velocity velocity = Modules.get().get(Velocity.class);
         if ((Object) this == mc.player && velocity.isActive() && velocity.liquids.get()) {
             vec = vec.multiply(velocity.getHorizontal(velocity.liquidsHorizontal), velocity.getVertical(velocity.liquidsVertical), velocity.getHorizontal(velocity.liquidsHorizontal));
         }
-
         return vec;
     }
 
@@ -66,13 +67,13 @@ public abstract class EntityMixin {
         if ((Object) this == mc.player && Modules.get().get(NoSlow.class).fluidDrag()) info.setReturnValue(false);
     }
 
-    @ModifyExpressionValue(method = "updateSwimming", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;isSubmergedInWater()Z"))
-    private boolean isSubmergedInWater(boolean submerged) {
+    @Redirect(method = "updateSwimming", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;isSubmergedInWater()Z"), require = 0)
+    private boolean redirectIsSubmergedInWater(Entity entity) {
         if ((Object) this == mc.player && Modules.get().get(NoSlow.class).fluidDrag()) return false;
-        return submerged;
+        return entity.isSubmergedInWater();
     }
 
-    @ModifyArgs(method = "pushAwayFrom(Lnet/minecraft/entity/Entity;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;addVelocity(DDD)V"))
+    @ModifyArgs(method = "pushAwayFrom(Lnet/minecraft/entity/Entity;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;addVelocity(DDD)V"), require = 0)
     private void onPushAwayFrom(Args args, Entity entity) {
         Velocity velocity = Modules.get().get(Velocity.class);
 
@@ -89,14 +90,12 @@ public abstract class EntityMixin {
         }
     }
 
-    @ModifyReturnValue(method = "getJumpVelocityMultiplier", at = @At("RETURN"))
-    private float onGetJumpVelocityMultiplier(float original) {
+    @Inject(method = "getJumpVelocityMultiplier", at = @At("RETURN"), cancellable = true)
+    private void onGetJumpVelocityMultiplier(CallbackInfoReturnable<Float> cir) {
         if ((Object) this == mc.player) {
             JumpVelocityMultiplierEvent event = MeteorClient.EVENT_BUS.post(JumpVelocityMultiplierEvent.get());
-            return (original * event.multiplier);
+            cir.setReturnValue(cir.getReturnValue() * event.multiplier);
         }
-
-        return original;
     }
 
     @Inject(method = "move", at = @At("HEAD"))
@@ -117,7 +116,7 @@ public abstract class EntityMixin {
         }
     }
 
-    @Redirect(method = "getVelocityMultiplier", at = @At(value = "INVOKE", target = "Lnet/minecraft/block/BlockState;getBlock()Lnet/minecraft/block/Block;"))
+    @Redirect(method = "getVelocityMultiplier", at = @At(value = "INVOKE", target = "Lnet/minecraft/block/BlockState;getBlock()Lnet/minecraft/block/Block;"), require = 0)
     private Block getVelocityMultiplierGetBlockProxy(BlockState blockState) {
         if ((Object) this != mc.player) return blockState.getBlock();
         if (blockState.getBlock() == Blocks.SOUL_SAND && Modules.get().get(NoSlow.class).soulSand()) return Blocks.STONE;
@@ -125,12 +124,13 @@ public abstract class EntityMixin {
         return blockState.getBlock();
     }
 
-    @ModifyReturnValue(method = "isInvisibleTo(Lnet/minecraft/entity/player/PlayerEntity;)Z", at = @At("RETURN"))
-    private boolean isInvisibleToCanceller(boolean original) {
-        if (!Utils.canUpdate()) return original;
+    @Inject(method = "isInvisibleTo(Lnet/minecraft/entity/player/PlayerEntity;)Z", at = @At("RETURN"), cancellable = true)
+    private void isInvisibleToCanceller(PlayerEntity player, CallbackInfoReturnable<Boolean> cir) {
+        if (!Utils.canUpdate()) return;
         ESP esp = Modules.get().get(ESP.class);
-        if (Modules.get().get(NoRender.class).noInvisibility() || esp.isActive() && !esp.shouldSkip((Entity) (Object) this)) return false;
-        return original;
+        if (Modules.get().get(NoRender.class).noInvisibility() || esp.isActive() && !esp.shouldSkip((Entity) (Object) this)) {
+            cir.setReturnValue(false);
+        }
     }
 
     @Inject(method = "isGlowing", at = @At("HEAD"), cancellable = true)
@@ -156,8 +156,10 @@ public abstract class EntityMixin {
         }
     }
 
-    @ModifyReturnValue(method = "bypassesLandingEffects", at = @At("RETURN"))
-    private boolean cancelBounce(boolean original) {
-        return Modules.get().get(NoFall.class).cancelBounce() || original;
+    @Inject(method = "bypassesLandingEffects", at = @At("RETURN"), cancellable = true)
+    private void cancelBounce(CallbackInfoReturnable<Boolean> cir) {
+        if (Modules.get().get(NoFall.class).cancelBounce()) {
+            cir.setReturnValue(true);
+        }
     }
 }

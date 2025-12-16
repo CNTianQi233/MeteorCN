@@ -5,7 +5,6 @@
 
 package meteordevelopment.meteorclient.mixin;
 
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.authlib.GameProfile;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.DamageEvent;
@@ -46,10 +45,10 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         return client.currentScreen;
     }
 
-    @ModifyExpressionValue(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;isUsingItem()Z"))
-    private boolean redirectUsingItem(boolean isUsingItem) {
+    @Redirect(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;isUsingItem()Z"), require = 0)
+    private boolean redirectUsingItem(ClientPlayerEntity player) {
         if (Modules.get().get(NoSlow.class).items()) return false;
-        return isUsingItem;
+        return player.isUsingItem();
     }
 
     @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
@@ -106,8 +105,8 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
     }
 
     // Sneak
-    @ModifyExpressionValue(method = "sendMovementPackets", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;isSneaking()Z"))
-    private boolean isSneaking(boolean sneaking) {
-        return Modules.get().get(Sneak.class).doPacket() || Modules.get().get(NoSlow.class).airStrict() || sneaking;
+    @Redirect(method = "sendMovementPackets", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;isSneaking()Z"), require = 0)
+    private boolean redirectIsSneaking(ClientPlayerEntity player) {
+        return Modules.get().get(Sneak.class).doPacket() || Modules.get().get(NoSlow.class).airStrict() || player.isSneaking();
     }
 }

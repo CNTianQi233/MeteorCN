@@ -5,8 +5,7 @@
 
 package meteordevelopment.meteorclient.mixin;
 
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import net.minecraft.util.math.MathHelper;
 import com.mojang.blaze3d.systems.RenderSystem;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.asm.Asm;
@@ -42,6 +41,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(GameRenderer.class)
@@ -106,8 +106,9 @@ public abstract class GameRendererMixin {
         }
     }
 
-    @ModifyExpressionValue(method = "renderWorld", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/MathHelper;lerp(FFF)F"))
-    private float applyCameraTransformationsMathHelperLerpProxy(float original) {
+    @Redirect(method = "renderWorld", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/math/MathHelper;lerp(FFF)F"), require = 0)
+    private float applyCameraTransformationsMathHelperLerpProxy(float delta, float start, float end) {
+        float original = MathHelper.lerp(delta, start, end);
         return Modules.get().get(NoRender.class).noNausea() ? 0 : original;
     }
 
@@ -185,13 +186,12 @@ public abstract class GameRendererMixin {
 
     // FOV modification - Mixin replacement for ASM Transformer (used in Connector environment)
     // This provides the same functionality as GameRendererTransformer when ASM injection is not available
-    @ModifyReturnValue(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D", at = @At("RETURN"))
-    private double modifyGetFov(double original) {
+    @Inject(method = "getFov(Lnet/minecraft/client/render/Camera;FZ)D", at = @At("RETURN"), cancellable = true)
+    private void modifyGetFov(Camera camera, float tickDelta, boolean changingFov, CallbackInfoReturnable<Double> cir) {
         // Only apply this modification in Connector environment
         // In native Fabric, the ASM Transformer handles this
         if (Asm.isConnector()) {
-            return MeteorClient.EVENT_BUS.post(GetFovEvent.get(original)).fov;
+            cir.setReturnValue(MeteorClient.EVENT_BUS.post(GetFovEvent.get(cir.getReturnValue())).fov);
         }
-        return original;
     }
 }
