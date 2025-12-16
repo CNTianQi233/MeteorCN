@@ -51,7 +51,7 @@ public class ConnectorAdapter {
             GL.init();
             PostProcessRenderer.init();
             Renderer2D.init();
-            Fonts.init();
+            Fonts.refresh();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -61,7 +61,7 @@ public class ConnectorAdapter {
         try {
             PlayerHeadUtils.init();
             RenderUtils.init();
-            ChamsShader.init();
+            ChamsShader.load();
             RainbowColors.init();
             ChatUtils.init();
             GuiThemes.postInit();
