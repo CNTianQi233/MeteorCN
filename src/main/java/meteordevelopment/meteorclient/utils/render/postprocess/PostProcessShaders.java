@@ -14,6 +14,7 @@ public class PostProcessShaders {
 
     @PreInit
     public static void init() {
+        if (CHAMS != null) return;
         CHAMS = new ChamsShader();
         ENTITY_OUTLINE = new EntityOutlineShader();
         STORAGE_OUTLINE = new StorageOutlineShader();
