@@ -1,0 +1,174 @@
+name: Build Meteor Client 1.20.1
+
+on:
+  # 自动触发：推送到 1.20.1 分支或 master 分支
+  push:
+    branches:
+      - "1.20.1"
+      - "master"
+    paths-ignore:
+      - "*.md"
+      - "LICENSE"
+      - ".gitignore"
+
+  # 自动触发：PR 到 1.20.1 分支
+  pull_request:
+    branches:
+      - "1.20.1"
+
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "构建类型"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - devbuild
+      version_suffix:
+        description: "版本后缀（可选，如 beta1、rc1）"
+        required: false
+        default: ""
+      create_release:
+        description: "是否创建 GitHub Release"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  JAVA_VERSION: "17"
+  MINECRAFT_VERSION: "1.20.1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_message=$(git log -1 --pretty=%B | head -n 1)" >> $GITHUB_OUTPUT
+
+      - name: Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/1.20.1' && github.ref != 'refs/heads/master' }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      # Release 构建
+      - name: Build Release
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.build_type == 'release' }}
+        run: |
+          ./gradlew build --no-daemon \
+            -Pcommit=${{ steps.commit.outputs.short_sha }}
+
+      # DevBuild 构建（手动触发时）
+      - name: Build DevBuild
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'devbuild' }}
+        run: |
+          ./gradlew build --no-daemon \
+            -Pdevbuild=${{ steps.commit.outputs.commit_count }} \
+            -Pcommit=${{ steps.commit.outputs.short_sha }}
+
+      - name: Get artifact info
+        id: artifact
+        run: |
+          # 查找构建的 JAR 文件
+          JAR_FILE=$(find build/libs -name "meteor-client-*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | head -1)
+          JAR_NAME=$(basename "$JAR_FILE")
+          echo "jar_path=$JAR_FILE" >> $GITHUB_OUTPUT
+          echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
+
+          # 提取版本号
+          VERSION=$(echo "$JAR_NAME" | sed 's/meteor-client-\(.*\)\.jar/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meteor-client-${{ env.MINECRAFT_VERSION }}-${{ steps.commit.outputs.short_sha }}
+          path: |
+            build/libs/meteor-client-*.jar
+            !build/libs/*-sources.jar
+            !build/libs/*-dev.jar
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload sources artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meteor-client-${{ env.MINECRAFT_VERSION }}-${{ steps.commit.outputs.short_sha }}-sources
+          path: build/libs/*-sources.jar
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # 创建 GitHub Release（仅手动触发且选择创建）
+      - name: Create Release
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.artifact.outputs.version }}${{ github.event.inputs.version_suffix != '' && format('-{0}', github.event.inputs.version_suffix) || '' }}
+          name: Meteor Client ${{ steps.artifact.outputs.version }} for MC ${{ env.MINECRAFT_VERSION }}
+          body: |
+            ## Meteor Client ${{ steps.artifact.outputs.version }}
+
+            **Minecraft 版本**: ${{ env.MINECRAFT_VERSION }}
+            **构建类型**: ${{ github.event.inputs.build_type }}
+            **提交**: ${{ steps.commit.outputs.short_sha }}
+
+            ### 安装说明
+
+            #### Fabric 环境
+            1. 安装 Fabric Loader 0.14.21+
+            2. 将 JAR 文件放入 `mods` 文件夹
+
+            #### Forge 环境（通过 Sinytra Connector）
+            1. 安装 Forge 1.20.1
+            2. 安装 [Sinytra Connector](https://modrinth.com/mod/connector)
+            3. 安装 [Forgified Fabric API](https://modrinth.com/mod/forgified-fabric-api)
+            4. 将 JAR 文件放入 `mods` 文件夹
+
+            ---
+            > 此版本由 GitHub Actions 自动构建
+          files: |
+            ${{ steps.artifact.outputs.jar_path }}
+          draft: false
+          prerelease: ${{ github.event.inputs.build_type == 'devbuild' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 构建状态通知（可选）
+  notify:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Build Status
+        run: |
+          if [ "${{ needs.build.result }}" == "success" ]; then
+            echo "✅ Build succeeded!"
+          else
+            echo "❌ Build failed!"
+            exit 1
+          fi

@@ -1,0 +1,145 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号（如 0.5.4）"
+        required: true
+      release_title:
+        description: "发布标题"
+        required: false
+        default: ""
+      prerelease:
+        description: "是否为预发布版本"
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: "是否保存为草稿"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  JAVA_VERSION: "17"
+  MINECRAFT_VERSION: "1.20.1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release JAR
+        run: |
+          ./gradlew build --no-daemon \
+            -Pcommit=${{ steps.commit.outputs.short_sha }}
+
+      - name: Prepare release files
+        id: prepare
+        run: |
+          # 查找主 JAR 文件
+          JAR_FILE=$(find build/libs -name "meteor-client-*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | head -1)
+          JAR_NAME=$(basename "$JAR_FILE")
+
+          # 重命名为带版本的文件名
+          RELEASE_NAME="meteor-client-${{ github.event.inputs.version }}-mc${{ env.MINECRAFT_VERSION }}.jar"
+          cp "$JAR_FILE" "build/libs/$RELEASE_NAME"
+
+          echo "jar_path=build/libs/$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "jar_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+
+          # 查找 sources JAR
+          SOURCES_FILE=$(find build/libs -name "*-sources.jar" | head -1)
+          if [ -n "$SOURCES_FILE" ]; then
+            SOURCES_NAME="meteor-client-${{ github.event.inputs.version }}-mc${{ env.MINECRAFT_VERSION }}-sources.jar"
+            cp "$SOURCES_FILE" "build/libs/$SOURCES_NAME"
+            echo "sources_path=build/libs/$SOURCES_NAME" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个 tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "## 更新内容" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> CHANGELOG.md
+          else
+            echo "## 首次发布" > CHANGELOG.md
+          fi
+
+          cat CHANGELOG.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.release_title != '' && github.event.inputs.release_title || format('Meteor Client {0} for MC {1}', github.event.inputs.version, env.MINECRAFT_VERSION) }}
+          body: |
+            # Meteor Client ${{ github.event.inputs.version }}
+
+            **Minecraft 版本**: ${{ env.MINECRAFT_VERSION }}
+            **构建提交**: [${{ steps.commit.outputs.short_sha }}](https://github.com/${{ github.repository }}/commit/${{ steps.commit.outputs.full_sha }})
+
+            ## 安装说明
+
+            ### Fabric 环境
+            1. 安装 [Fabric Loader](https://fabricmc.net/) 0.14.21 或更高版本
+            2. 下载下方的 JAR 文件
+            3. 将 JAR 文件放入游戏的 `mods` 文件夹
+
+            ### Forge 环境（通过 Sinytra Connector）
+            1. 安装 Forge 1.20.1
+            2. 安装 [Sinytra Connector](https://modrinth.com/mod/connector)
+            3. 安装 [Forgified Fabric API](https://modrinth.com/mod/forgified-fabric-api)
+            4. 下载下方的 JAR 文件
+            5. 将 JAR 文件放入游戏的 `mods` 文件夹
+
+            ---
+
+            ${{ steps.changelog.outputs.content }}
+
+          files: |
+            ${{ steps.prepare.outputs.jar_path }}
+            ${{ steps.prepare.outputs.sources_path }}
+          draft: ${{ github.event.inputs.draft }}
+          prerelease: ${{ github.event.inputs.prerelease }}
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.event.inputs.version }}
+          path: |
+            ${{ steps.prepare.outputs.jar_path }}
+          retention-days: 90
