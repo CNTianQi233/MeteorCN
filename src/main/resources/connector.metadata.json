@@ -22,7 +22,10 @@
     }
   },
   "class_filters": {
-    "disable": []
+    "skip_transform": [
+      "meteordevelopment.meteorclient.asm.Asm$Transformer",
+      "meteordevelopment.meteorclient.asm.Asm"
+    ]
   },
   "aw_extension": {
     "entries": []
