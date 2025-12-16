@@ -16,6 +16,7 @@ public class MeteorExecutor {
 
     @PreInit
     public static void init() {
+        if (executor != null) return;
         AtomicInteger threadNumber = new AtomicInteger(1);
 
         executor = Executors.newCachedThreadPool((task) -> {

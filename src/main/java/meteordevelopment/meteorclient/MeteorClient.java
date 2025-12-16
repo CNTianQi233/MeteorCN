@@ -26,6 +26,7 @@ import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.misc.Version;
 import meteordevelopment.meteorclient.utils.misc.input.KeyAction;
 import meteordevelopment.meteorclient.utils.misc.input.KeyBinds;
+import meteordevelopment.meteorclient.utils.network.MeteorExecutor;
 import meteordevelopment.meteorclient.utils.network.OnlinePlayers;
 import meteordevelopment.meteorclient.utils.render.postprocess.PostProcessShaders;
 import meteordevelopment.meteorclient.utils.tooltip.MeteorTooltipManager;
@@ -137,8 +138,8 @@ public class MeteorClient implements ClientModInitializer {
         // Pre init
         ReflectInit.init(PreInit.class);
         
-        // Manual init for critical components that Reflection might miss in Connector
-        PostProcessShaders.init();
+        // Manual init for Connector
+        ConnectorAdapter.manualPreInit();
 
         // Initialize tooltip manager (using Fabric API for Connector compatibility)
         MeteorTooltipManager.init();
@@ -163,6 +164,7 @@ public class MeteorClient implements ClientModInitializer {
 
         // Post init
         ReflectInit.init(PostInit.class);
+        ConnectorAdapter.manualPostInit();
 
         // Save on shutdown
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
