@@ -72,7 +72,6 @@
     "EnchantingTableBlockEntityRendererMixin",
     "EndCrystalEntityRendererMixin",
     "EntityAccessor",
-    "EntityBucketItemAccessor",
     "EntityMixin",
     "EntityRenderDispatcherMixin",
     "EntityRendererMixin",

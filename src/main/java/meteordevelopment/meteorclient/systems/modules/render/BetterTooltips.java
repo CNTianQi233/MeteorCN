@@ -357,13 +357,31 @@ public class BetterTooltips extends Module {
 
         // Fish peek
         else if (event.itemStack.getItem() instanceof EntityBucketItem bucketItem && previewEntities()) {
-            EntityType<?> type = ((EntityBucketItemAccessor) bucketItem).getEntityType();
-            Entity entity = type.create(mc.world);
-            if (entity != null) {
-                ((Bucketable) entity).copyDataFromNbt(event.itemStack.getOrCreateNbt());
-                ((EntityAccessor) entity).setInWater(true);
-                event.tooltipData = new EntityTooltipComponent(entity);
+            EntityType<?> type = getBucketEntityType(bucketItem);
+            if (type != null) {
+                Entity entity = type.create(mc.world);
+                if (entity != null) {
+                    ((Bucketable) entity).copyDataFromNbt(event.itemStack.getOrCreateNbt());
+                    ((EntityAccessor) entity).setInWater(true);
+                    event.tooltipData = new EntityTooltipComponent(entity);
+                }
             }
+        }
+    }
+
+    private EntityType<?> getBucketEntityType(EntityBucketItem item) {
+        try {
+            java.lang.reflect.Field field;
+            try {
+                field = EntityBucketItem.class.getDeclaredField("entityType");
+            } catch (NoSuchFieldException e) {
+                field = EntityBucketItem.class.getDeclaredField("f_151134_");
+            }
+            field.setAccessible(true);
+            return (EntityType<?>) field.get(item);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
 

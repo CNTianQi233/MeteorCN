@@ -12,6 +12,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(EntityBucketItem.class)
 public interface EntityBucketItemAccessor {
-    @Accessor(value = "f_151134_", remap = false)
+    @Accessor("entityType")
     EntityType<?> getEntityType();
 }
